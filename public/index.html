@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consulta de Despesas - TCE SP</title>
+  <style>
+    :root {
+      --bg1: #071026;
+      --bg2: #0b2540;
+      --card: rgba(255, 255, 255, 0.03);
+      --accent: #60a5fa;
+      --good: #00c48c;
+      --bad: #ff6b6b;
+      --muted: #95a3b6;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
+      color: #e8f0ff;
+      padding: 2rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 940px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+      border-radius: 14px;
+      padding: 2rem;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      color: var(--accent);
+    }
+
+    .lead {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .form {
+      margin-top: 1.1rem;
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input,
+    select {
+      flex: 1;
+      padding: 0.9rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      background: var(--card);
+      color: inherit;
+      outline: none;
+      font-size: 1rem;
+    }
+
+    select option {
+      background: var(--bg2);
+      color: #e8f0ff;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    button {
+      background: var(--accent);
+      border: 0;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      color: #022;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .resultado {
+      margin-top: 1.25rem;
+      padding: 1rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      min-height: 80px;
+    }
+
+    .card {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+    }
+
+    .pago {
+      border-left: 6px solid var(--good);
+      background: rgba(0, 196, 140, 0.06);
+      color: var(--good);
+    }
+
+    .inconcl {
+      border-left: 6px solid #f7c948;
+      background: rgba(247, 201, 72, 0.04);
+      color: #f7c948;
+    }
+
+    .nao {
+      border-left: 6px solid var(--bad);
+      background: rgba(255, 107, 107, 0.04);
+      color: var(--bad);
+    }
+
+    .small {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Consulta de Despesas Públicas - SP</h1>
+      <p class="lead">Todos os detalhes carregados diretamente: fornecedor, valor e data.</p>
+    </header>
+
+    <div class="form">
+      <input id="cidade" placeholder="Município" value="colina" />
+      <input id="ano" placeholder="Ano" type="number" value="2025" />
+      <input id="mes" placeholder="Mês (1-12)" type="number" />
+      <input id="empenho" placeholder="Número do empenho (ex: 000014-2025)" />
+      <select id="evento">
+        <option value="">Todos os eventos</option>
+        <option value="Pagamento">Pagamento</option>
+        <option value="Liquidação">Liquidação</option>
+        <option value="Empenho">Empenho</option>
+        <option value="Reforço">Reforço</option>
+        <option value="Anulação">Anulação</option>
+      </select>
+      <div class="buttons">
+        <button id="buscar">Buscar</button>
+      </div>
+    </div>
+
+    <div id="resultado" class="resultado">
+      <p class="muted">Preencha os filtros e clique em “Buscar”.</p>
+    </div>
+  </div>
+
+ <script>
+  async function buscarDespesas() {
+    const cidade = document.getElementById('cidade').value.trim().toLowerCase();
+    const ano = document.getElementById('ano').value.trim();
+    const mes = document.getElementById('mes').value.trim();
+    const eventoFiltro = document.getElementById('evento').value;
+    const empenhoFiltro = document.getElementById('empenho').value.trim();
+    const resultado = document.getElementById('resultado');
+
+    resultado.innerHTML = "<p class='muted'>Buscando dados...</p>";
+
+    try {
+      // 🔹 Escolhe a URL certa
+      let url = "";
+      if (mes) {
+        url = `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}/${mes}`;
+      } else {
+        url = `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}`;
+      }
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Erro ao buscar dados");
+      const data = await res.json();
+      if (!data.length) { 
+        resultado.innerHTML = "<p class='muted'>Nenhuma despesa encontrada.</p>"; 
+        return; 
+      }
+
+      let filtrado = data;
+
+      // 🔹 Filtro de número de empenho (normalizado)
+      if (empenhoFiltro) {
+        const filtro = empenhoFiltro.replace(/[^0-9]/g, ""); // só números
+        filtrado = filtrado.filter(i => {
+          const emp = (i.nr_empenho || "").replace(/[^0-9]/g, "");
+          return emp.includes(filtro);
+        });
+      }
+
+      // 🔹 Filtro de tipo de evento
+      if (eventoFiltro) {
+        filtrado = filtrado.filter(i => 
+          i.evento && i.evento.toLowerCase().includes(eventoFiltro.toLowerCase())
+        );
+      }
+
+      if (!filtrado.length) { 
+        resultado.innerHTML = "<p class='muted'>Nenhum registro encontrado com esses filtros.</p>"; 
+        return; 
+      }
+
+      resultado.innerHTML = "<p class='muted'>Carregando detalhes completos (pode demorar)...</p>";
+
+      // 🔹 Busca detalhes completos de cada registro
+      const detalhesPromises = filtrado.map(async item => {
+        try {
+          const detRes = await fetch(`https://transparencia.tce.sp.gov.br/api/json/despesa/${item.id}`);
+          const det = await detRes.json();
+          return { ...item, ...det };
+        } catch (e) {
+          return item;
+        }
+      });
+
+      const detalhados = await Promise.all(detalhesPromises);
+
+      // 🔹 Monta os cards
+      let html = "";
+      detalhados.forEach(item => {
+        const valor = Number(item.valor || item.vl_despesa || 0)
+          .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        let classe = "inconcl";
+        if (/pago/i.test(item.evento)) classe = "pago";
+        else if (/anula/i.test(item.evento)) classe = "nao";
+
+        html += `
+          <div class="card ${classe}">
+            <strong>${item.orgao || "Órgão não informado"}</strong> — ${item.evento || "Evento não informado"}<br>
+            <span class="small">Empenho: ${item.nr_empenho || 'N/D'}</span><br>
+            <span class="small">Fornecedor: ${item.nm_fornecedor || 'Não informado'} (ID: ${item.id_fornecedor || 'N/D'})</span><br>
+            <span class="small">Data: ${item.dt_emissao_despesa || 'N/D'}</span><br>
+            <span class="small">Valor: ${valor}</span>
+          </div>`;
+      });
+
+      resultado.innerHTML = html;
+
+    } catch (e) {
+      console.error(e);
+      resultado.innerHTML = "<p class='muted'>Erro ao carregar dados. Verifique município e tente novamente.</p>";
+    }
+  }
+
+  document.getElementById('buscar').addEventListener('click', buscarDespesas);
+</script>
+</body>
+
+</html>

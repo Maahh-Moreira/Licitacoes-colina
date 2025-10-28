@@ -1,0 +1,14 @@
+{
+  "name": "checador-licitacoes-colina",
+  "version": "1.0.0",
+  "description": "Verifica pagamentos de licitações de Colina-SP via API TCE-SP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
