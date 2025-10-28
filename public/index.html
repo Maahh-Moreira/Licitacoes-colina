@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -168,102 +167,105 @@
     </div>
   </div>
 
- <script>
-  async function buscarDespesas() {
-    const cidade = document.getElementById('cidade').value.trim().toLowerCase();
-    const ano = document.getElementById('ano').value.trim();
-    const mes = document.getElementById('mes').value.trim();
-    const eventoFiltro = document.getElementById('evento').value;
-    const empenhoFiltro = document.getElementById('empenho').value.trim();
-    const resultado = document.getElementById('resultado');
+  <script>
+function formatValor(valor) {
+  if (!valor) return "R$ 0,00";
+  if (typeof valor === "string") valor = valor.replace(/\./g, "").replace(",", ".");
+  const num = Number(valor);
+  return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
-    resultado.innerHTML = "<p class='muted'>Buscando dados...</p>";
-
-    try {
-      // 🔹 Escolhe a URL certa
-      let url = "";
-      if (mes) {
-        url = `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}/${mes}`;
-      } else {
-        url = `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}`;
-      }
-
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Erro ao buscar dados");
-      const data = await res.json();
-      if (!data.length) { 
-        resultado.innerHTML = "<p class='muted'>Nenhuma despesa encontrada.</p>"; 
-        return; 
-      }
-
-      let filtrado = data;
-
-      // 🔹 Filtro de número de empenho (normalizado)
-      if (empenhoFiltro) {
-        const filtro = empenhoFiltro.replace(/[^0-9]/g, ""); // só números
-        filtrado = filtrado.filter(i => {
-          const emp = (i.nr_empenho || "").replace(/[^0-9]/g, "");
-          return emp.includes(filtro);
-        });
-      }
-
-      // 🔹 Filtro de tipo de evento
-      if (eventoFiltro) {
-        filtrado = filtrado.filter(i => 
-          i.evento && i.evento.toLowerCase().includes(eventoFiltro.toLowerCase())
-        );
-      }
-
-      if (!filtrado.length) { 
-        resultado.innerHTML = "<p class='muted'>Nenhum registro encontrado com esses filtros.</p>"; 
-        return; 
-      }
-
-      resultado.innerHTML = "<p class='muted'>Carregando detalhes completos (pode demorar)...</p>";
-
-      // 🔹 Busca detalhes completos de cada registro
-      const detalhesPromises = filtrado.map(async item => {
-        try {
-          const detRes = await fetch(`https://transparencia.tce.sp.gov.br/api/json/despesa/${item.id}`);
-          const det = await detRes.json();
-          return { ...item, ...det };
-        } catch (e) {
-          return item;
-        }
-      });
-
-      const detalhados = await Promise.all(detalhesPromises);
-
-      // 🔹 Monta os cards
-      let html = "";
-      detalhados.forEach(item => {
-        const valor = Number(item.valor || item.vl_despesa || 0)
-          .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-        let classe = "inconcl";
-        if (/pago/i.test(item.evento)) classe = "pago";
-        else if (/anula/i.test(item.evento)) classe = "nao";
-
-        html += `
-          <div class="card ${classe}">
-            <strong>${item.orgao || "Órgão não informado"}</strong> — ${item.evento || "Evento não informado"}<br>
-            <span class="small">Empenho: ${item.nr_empenho || 'N/D'}</span><br>
-            <span class="small">Fornecedor: ${item.nm_fornecedor || 'Não informado'} (ID: ${item.id_fornecedor || 'N/D'})</span><br>
-            <span class="small">Data: ${item.dt_emissao_despesa || 'N/D'}</span><br>
-            <span class="small">Valor: ${valor}</span>
-          </div>`;
-      });
-
-      resultado.innerHTML = html;
-
-    } catch (e) {
-      console.error(e);
-      resultado.innerHTML = "<p class='muted'>Erro ao carregar dados. Verifique município e tente novamente.</p>";
-    }
+function extrairValor(item) {
+  // Procura automaticamente qualquer campo que comece com "vl_" ou seja "valor"
+  for (let key in item) {
+    if (/^(vl_|valor)/i.test(key) && item[key]) return item[key];
   }
+  return 0;
+}
 
-  document.getElementById('buscar').addEventListener('click', buscarDespesas);
+function filtrarEvento(item, filtro) {
+  if (!filtro) return true;
+  const evento = (item.evento || "").toLowerCase();
+  filtro = filtro.toLowerCase();
+  switch(filtro) {
+    case "pagamento": return /pagamento/i.test(evento);
+    case "liquidação": return /liquid/i.test(evento);
+    case "empenho": return /empenho/i.test(evento);
+    case "reforço": return /reforço|reforco/i.test(evento);
+    case "anulação": return /anula/i.test(evento);
+    default: return true;
+  }
+}
+
+async function buscarDespesas() {
+  const cidade = document.getElementById('cidade').value.trim().toLowerCase();
+  const ano = document.getElementById('ano').value.trim();
+  const mes = document.getElementById('mes').value.trim();
+  const eventoFiltro = document.getElementById('evento').value;
+  const empenhoFiltro = document.getElementById('empenho').value.trim();
+  const resultado = document.getElementById('resultado');
+
+  resultado.innerHTML = "<p class='muted'>Buscando dados...</p>";
+
+  try {
+    const url = mes ?
+      `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}/${mes}` :
+      `https://transparencia.tce.sp.gov.br/api/json/despesas/${cidade}/${ano}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Erro ao buscar dados");
+    const data = await res.json();
+    if (!data.length) {
+      resultado.innerHTML = "<p class='muted'>Nenhuma despesa encontrada.</p>";
+      return;
+    }
+
+    let filtrado = data;
+
+    // Filtro por número de empenho
+    if (empenhoFiltro) {
+      const filtro = empenhoFiltro.replace(/[^0-9]/g, "");
+      filtrado = filtrado.filter(i => (i.nr_empenho || "").replace(/[^0-9]/g, "").includes(filtro));
+    }
+
+    // Filtro de evento
+    filtrado = filtrado.filter(i => filtrarEvento(i, eventoFiltro));
+
+    if (!filtrado.length) {
+      resultado.innerHTML = "<p class='muted'>Nenhum registro encontrado com esses filtros.</p>";
+      return;
+    }
+
+    // Monta os cards
+    let html = "";
+   filtrado.forEach(item => {
+  const valor = formatValor(item.vl_despesa);
+
+  let classe = "inconcl";
+  if (/pago/i.test(item.evento)) classe = "pago";
+  else if (/anula/i.test(item.evento)) classe = "nao";
+
+  html += `
+    <div class="card ${classe}">
+      <strong>${item.orgao || "Órgão não informado"}</strong> — ${item.evento || "Evento não informado"}<br>
+      <span class="small">Empenho: ${item.nr_empenho || 'N/D'}</span><br>
+      <span class="small">Fornecedor: ${item.nm_fornecedor || 'Não informado'} (ID: ${item.id_fornecedor || 'N/D'})</span><br>
+      <span class="small">Data: ${item.dt_emissao_despesa || 'N/D'}</span><br>
+      <span class="small">Valor: ${valor}</span>
+    </div>`;
+});
+
+    resultado.innerHTML = html;
+
+  } catch (e) {
+    console.error(e);
+    resultado.innerHTML = "<p class='muted'>Erro ao carregar dados. Verifique município e tente novamente.</p>";
+  }
+}
+
+document.getElementById('buscar').addEventListener('click', buscarDespesas);
 </script>
+
 </body>
 
 </html>
